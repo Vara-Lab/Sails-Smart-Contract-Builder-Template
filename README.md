@@ -22,6 +22,7 @@
 rustup install 1.83
 rustup default 1.83
 rustup target add wasm32-unknown-unknown
+rustup component add rust-src --toolchain 1.83-x86_64-unknown-linux-gnu
 ```
 ### Compile the smart contract by running the following command:
 
