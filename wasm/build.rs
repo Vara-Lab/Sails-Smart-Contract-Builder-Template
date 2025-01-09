@@ -1,5 +1,5 @@
 use sails_client_gen::ClientGenerator;
-use app::TrafficLightProgram;
+use app::Program;
 use std::{env, path::PathBuf, fs};
 
 fn main() {
@@ -20,7 +20,7 @@ fn main() {
     let client_path = outdir_path.clone().join("app_client.rs");
 
     // This generate the contract IDL
-    sails_idl_gen::generate_idl_to_file::<TrafficLightProgram>(idl_path.clone())
+    sails_idl_gen::generate_idl_to_file::<Program>(idl_path.clone())
         .unwrap();
 
     // Generator of the clients of the contract

@@ -1,56 +1,32 @@
-type KeyringData = struct {
-  address: str,
-  encoded: str,
+type Events = enum {
+  ProducerRegistered: struct { id: actor_id },
+  ProducerAlreadyRegistered: struct { id: actor_id },
+  ProducerNotFound: struct { id: actor_id },
+  EnergyUpdated: struct { id: actor_id, energy: u64 },
+  AdminRegistered: struct { id: actor_id },
+  AdminAlreadyRegistered: struct { id: actor_id },
 };
 
-type KeyringEvent = enum {
-  KeyringAccountSet,
-  Error: KeyringError,
+type IoState = struct {
+  admins: vec actor_id,
+  energy_producers: vec IoEnergyProducer,
 };
 
-type KeyringError = enum {
-  KeyringAddressAlreadyEsists,
-  UserAddressAlreadyExists,
-  UserCodedNameAlreadyExists,
-  UserDoesNotHasKeyringAccount,
-  KeyringAccountAlreadyExists,
-  SessionHasInvalidCredentials,
-  UserAndKeyringAddressAreTheSame,
-};
-
-type KeyringQueryEvent = enum {
-  LastWhoCall: actor_id,
-  SignlessAccountAddress: opt actor_id,
-  SignlessAccountData: opt KeyringData,
-};
-
-type TrafficLightEvent = enum {
-  Green,
-  Yellow,
-  Red,
-};
-
-type IoTrafficLightState = struct {
-  current_light: str,
-  all_users: vec struct { actor_id, str },
+type IoEnergyProducer = struct {
+  id: actor_id,
+  energy_generated: u64,
 };
 
 constructor {
   New : ();
 };
 
-service Keyring {
-  BindKeyringDataToUserAddress : (user_address: actor_id, keyring_data: KeyringData) -> KeyringEvent;
-  BindKeyringDataToUserCodedName : (user_coded_name: str, keyring_data: KeyringData) -> KeyringEvent;
-  query KeyringAccountData : (keyring_address: actor_id) -> KeyringQueryEvent;
-  query KeyringAddressFromUserAddress : (user_address: actor_id) -> KeyringQueryEvent;
-  query KeyringAddressFromUserCodedName : (user_coded_name: str) -> KeyringQueryEvent;
-};
-
-service TrafficLight {
-  Green : () -> TrafficLightEvent;
-  Red : () -> TrafficLightEvent;
-  Yellow : () -> TrafficLightEvent;
-  query TrafficLight : () -> IoTrafficLightState;
+service Service {
+  RegisterAdmin : (admin_id: actor_id) -> Events;
+  RegisterProducer : (producer_id: actor_id) -> Events;
+  UpdateProducerEnergy : (producer_id: actor_id, energy: u64) -> Events;
+  query QueryAdmins : () -> IoState;
+  query QueryEnergyProducers : () -> IoState;
+  query QueryProducerEnergy : (producer_id: actor_id) -> opt u64;
 };
 

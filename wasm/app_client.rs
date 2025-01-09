@@ -11,12 +11,14 @@ pub struct AppFactory<R> {
     #[allow(dead_code)]
     remoting: R,
 }
+
 impl<R> AppFactory<R> {
     #[allow(unused)]
     pub fn new(remoting: R) -> Self {
         Self { remoting }
     }
 }
+
 impl<R: Remoting + Clone> traits::AppFactory for AppFactory<R> {
     type Args = R::Args;
     fn new(&self) -> impl Activation<Args = R::Args> {
@@ -30,12 +32,14 @@ pub mod app_factory {
         use super::*;
         use sails_rs::calls::ActionIo;
         pub struct New(());
+
         impl New {
             #[allow(dead_code)]
             pub fn encode_call() -> Vec<u8> {
                 <New as ActionIo>::encode_call(&())
             }
         }
+
         impl ActionIo for New {
             const ROUTE: &'static [u8] = &[12, 78, 101, 119];
             type Params = ();
@@ -43,300 +47,188 @@ pub mod app_factory {
         }
     }
 }
-pub struct Keyring<R> {
+pub struct Service<R> {
     remoting: R,
 }
-impl<R> Keyring<R> {
+
+impl<R> Service<R> {
     pub fn new(remoting: R) -> Self {
         Self { remoting }
     }
 }
-impl<R: Remoting + Clone> traits::Keyring for Keyring<R> {
+
+impl<R: Remoting + Clone> traits::Service for Service<R> {
     type Args = R::Args;
-    fn bind_keyring_data_to_user_address(
+    fn register_admin(&mut self, admin_id: ActorId) -> impl Call<Output = Events, Args = R::Args> {
+        RemotingAction::<_, service::io::RegisterAdmin>::new(self.remoting.clone(), admin_id)
+    }
+    fn register_producer(
         &mut self,
-        user_address: ActorId,
-        keyring_data: KeyringData,
-    ) -> impl Call<Output = KeyringEvent, Args = R::Args> {
-        RemotingAction::<_, keyring::io::BindKeyringDataToUserAddress>::new(
-            self.remoting.clone(),
-            (user_address, keyring_data),
-        )
+        producer_id: ActorId,
+    ) -> impl Call<Output = Events, Args = R::Args> {
+        RemotingAction::<_, service::io::RegisterProducer>::new(self.remoting.clone(), producer_id)
     }
-    fn bind_keyring_data_to_user_coded_name(
+    fn update_producer_energy(
         &mut self,
-        user_coded_name: String,
-        keyring_data: KeyringData,
-    ) -> impl Call<Output = KeyringEvent, Args = R::Args> {
-        RemotingAction::<_, keyring::io::BindKeyringDataToUserCodedName>::new(
+        producer_id: ActorId,
+        energy: u64,
+    ) -> impl Call<Output = Events, Args = R::Args> {
+        RemotingAction::<_, service::io::UpdateProducerEnergy>::new(
             self.remoting.clone(),
-            (user_coded_name, keyring_data),
+            (producer_id, energy),
         )
     }
-    fn keyring_account_data(
-        &self,
-        keyring_address: ActorId,
-    ) -> impl Query<Output = KeyringQueryEvent, Args = R::Args> {
-        RemotingAction::<_, keyring::io::KeyringAccountData>::new(
-            self.remoting.clone(),
-            keyring_address,
-        )
+    fn query_admins(&self) -> impl Query<Output = IoState, Args = R::Args> {
+        RemotingAction::<_, service::io::QueryAdmins>::new(self.remoting.clone(), ())
     }
-    fn keyring_address_from_user_address(
-        &self,
-        user_address: ActorId,
-    ) -> impl Query<Output = KeyringQueryEvent, Args = R::Args> {
-        RemotingAction::<_, keyring::io::KeyringAddressFromUserAddress>::new(
-            self.remoting.clone(),
-            user_address,
-        )
+    fn query_energy_producers(&self) -> impl Query<Output = IoState, Args = R::Args> {
+        RemotingAction::<_, service::io::QueryEnergyProducers>::new(self.remoting.clone(), ())
     }
-    fn keyring_address_from_user_coded_name(
+    fn query_producer_energy(
         &self,
-        user_coded_name: String,
-    ) -> impl Query<Output = KeyringQueryEvent, Args = R::Args> {
-        RemotingAction::<_, keyring::io::KeyringAddressFromUserCodedName>::new(
+        producer_id: ActorId,
+    ) -> impl Query<Output = Option<u64>, Args = R::Args> {
+        RemotingAction::<_, service::io::QueryProducerEnergy>::new(
             self.remoting.clone(),
-            user_coded_name,
+            producer_id,
         )
     }
 }
 
-pub mod keyring {
+pub mod service {
     use super::*;
 
     pub mod io {
         use super::*;
         use sails_rs::calls::ActionIo;
-        pub struct BindKeyringDataToUserAddress(());
-        impl BindKeyringDataToUserAddress {
+        pub struct RegisterAdmin(());
+
+        impl RegisterAdmin {
             #[allow(dead_code)]
-            pub fn encode_call(user_address: ActorId, keyring_data: super::KeyringData) -> Vec<u8> {
-                <BindKeyringDataToUserAddress as ActionIo>::encode_call(&(
-                    user_address,
-                    keyring_data,
-                ))
+            pub fn encode_call(admin_id: ActorId) -> Vec<u8> {
+                <RegisterAdmin as ActionIo>::encode_call(&admin_id)
             }
         }
-        impl ActionIo for BindKeyringDataToUserAddress {
+
+        impl ActionIo for RegisterAdmin {
             const ROUTE: &'static [u8] = &[
-                28, 75, 101, 121, 114, 105, 110, 103, 112, 66, 105, 110, 100, 75, 101, 121, 114,
-                105, 110, 103, 68, 97, 116, 97, 84, 111, 85, 115, 101, 114, 65, 100, 100, 114, 101,
-                115, 115,
-            ];
-            type Params = (ActorId, super::KeyringData);
-            type Reply = super::KeyringEvent;
-        }
-        pub struct BindKeyringDataToUserCodedName(());
-        impl BindKeyringDataToUserCodedName {
-            #[allow(dead_code)]
-            pub fn encode_call(
-                user_coded_name: String,
-                keyring_data: super::KeyringData,
-            ) -> Vec<u8> {
-                <BindKeyringDataToUserCodedName as ActionIo>::encode_call(&(
-                    user_coded_name,
-                    keyring_data,
-                ))
-            }
-        }
-        impl ActionIo for BindKeyringDataToUserCodedName {
-            const ROUTE: &'static [u8] = &[
-                28, 75, 101, 121, 114, 105, 110, 103, 120, 66, 105, 110, 100, 75, 101, 121, 114,
-                105, 110, 103, 68, 97, 116, 97, 84, 111, 85, 115, 101, 114, 67, 111, 100, 101, 100,
-                78, 97, 109, 101,
-            ];
-            type Params = (String, super::KeyringData);
-            type Reply = super::KeyringEvent;
-        }
-        pub struct KeyringAccountData(());
-        impl KeyringAccountData {
-            #[allow(dead_code)]
-            pub fn encode_call(keyring_address: ActorId) -> Vec<u8> {
-                <KeyringAccountData as ActionIo>::encode_call(&keyring_address)
-            }
-        }
-        impl ActionIo for KeyringAccountData {
-            const ROUTE: &'static [u8] = &[
-                28, 75, 101, 121, 114, 105, 110, 103, 72, 75, 101, 121, 114, 105, 110, 103, 65, 99,
-                99, 111, 117, 110, 116, 68, 97, 116, 97,
+                28, 83, 101, 114, 118, 105, 99, 101, 52, 82, 101, 103, 105, 115, 116, 101, 114, 65,
+                100, 109, 105, 110,
             ];
             type Params = ActorId;
-            type Reply = super::KeyringQueryEvent;
+            type Reply = super::Events;
         }
-        pub struct KeyringAddressFromUserAddress(());
-        impl KeyringAddressFromUserAddress {
+        pub struct RegisterProducer(());
+
+        impl RegisterProducer {
             #[allow(dead_code)]
-            pub fn encode_call(user_address: ActorId) -> Vec<u8> {
-                <KeyringAddressFromUserAddress as ActionIo>::encode_call(&user_address)
+            pub fn encode_call(producer_id: ActorId) -> Vec<u8> {
+                <RegisterProducer as ActionIo>::encode_call(&producer_id)
             }
         }
-        impl ActionIo for KeyringAddressFromUserAddress {
+
+        impl ActionIo for RegisterProducer {
             const ROUTE: &'static [u8] = &[
-                28, 75, 101, 121, 114, 105, 110, 103, 116, 75, 101, 121, 114, 105, 110, 103, 65,
-                100, 100, 114, 101, 115, 115, 70, 114, 111, 109, 85, 115, 101, 114, 65, 100, 100,
-                114, 101, 115, 115,
+                28, 83, 101, 114, 118, 105, 99, 101, 64, 82, 101, 103, 105, 115, 116, 101, 114, 80,
+                114, 111, 100, 117, 99, 101, 114,
             ];
             type Params = ActorId;
-            type Reply = super::KeyringQueryEvent;
+            type Reply = super::Events;
         }
-        pub struct KeyringAddressFromUserCodedName(());
-        impl KeyringAddressFromUserCodedName {
-            #[allow(dead_code)]
-            pub fn encode_call(user_coded_name: String) -> Vec<u8> {
-                <KeyringAddressFromUserCodedName as ActionIo>::encode_call(&user_coded_name)
-            }
-        }
-        impl ActionIo for KeyringAddressFromUserCodedName {
-            const ROUTE: &'static [u8] = &[
-                28, 75, 101, 121, 114, 105, 110, 103, 124, 75, 101, 121, 114, 105, 110, 103, 65,
-                100, 100, 114, 101, 115, 115, 70, 114, 111, 109, 85, 115, 101, 114, 67, 111, 100,
-                101, 100, 78, 97, 109, 101,
-            ];
-            type Params = String;
-            type Reply = super::KeyringQueryEvent;
-        }
-    }
-}
-pub struct TrafficLight<R> {
-    remoting: R,
-}
-impl<R> TrafficLight<R> {
-    pub fn new(remoting: R) -> Self {
-        Self { remoting }
-    }
-}
-impl<R: Remoting + Clone> traits::TrafficLight for TrafficLight<R> {
-    type Args = R::Args;
-    fn green(&mut self) -> impl Call<Output = TrafficLightEvent, Args = R::Args> {
-        RemotingAction::<_, traffic_light::io::Green>::new(self.remoting.clone(), ())
-    }
-    fn red(&mut self) -> impl Call<Output = TrafficLightEvent, Args = R::Args> {
-        RemotingAction::<_, traffic_light::io::Red>::new(self.remoting.clone(), ())
-    }
-    fn yellow(&mut self) -> impl Call<Output = TrafficLightEvent, Args = R::Args> {
-        RemotingAction::<_, traffic_light::io::Yellow>::new(self.remoting.clone(), ())
-    }
-    fn traffic_light(&self) -> impl Query<Output = IoTrafficLightState, Args = R::Args> {
-        RemotingAction::<_, traffic_light::io::TrafficLight>::new(self.remoting.clone(), ())
-    }
-}
+        pub struct UpdateProducerEnergy(());
 
-pub mod traffic_light {
-    use super::*;
+        impl UpdateProducerEnergy {
+            #[allow(dead_code)]
+            pub fn encode_call(producer_id: ActorId, energy: u64) -> Vec<u8> {
+                <UpdateProducerEnergy as ActionIo>::encode_call(&(producer_id, energy))
+            }
+        }
 
-    pub mod io {
-        use super::*;
-        use sails_rs::calls::ActionIo;
-        pub struct Green(());
-        impl Green {
+        impl ActionIo for UpdateProducerEnergy {
+            const ROUTE: &'static [u8] = &[
+                28, 83, 101, 114, 118, 105, 99, 101, 80, 85, 112, 100, 97, 116, 101, 80, 114, 111,
+                100, 117, 99, 101, 114, 69, 110, 101, 114, 103, 121,
+            ];
+            type Params = (ActorId, u64);
+            type Reply = super::Events;
+        }
+        pub struct QueryAdmins(());
+
+        impl QueryAdmins {
             #[allow(dead_code)]
             pub fn encode_call() -> Vec<u8> {
-                <Green as ActionIo>::encode_call(&())
+                <QueryAdmins as ActionIo>::encode_call(&())
             }
         }
-        impl ActionIo for Green {
+
+        impl ActionIo for QueryAdmins {
             const ROUTE: &'static [u8] = &[
-                48, 84, 114, 97, 102, 102, 105, 99, 76, 105, 103, 104, 116, 20, 71, 114, 101, 101,
-                110,
+                28, 83, 101, 114, 118, 105, 99, 101, 44, 81, 117, 101, 114, 121, 65, 100, 109, 105,
+                110, 115,
             ];
             type Params = ();
-            type Reply = super::TrafficLightEvent;
+            type Reply = super::IoState;
         }
-        pub struct Red(());
-        impl Red {
+        pub struct QueryEnergyProducers(());
+
+        impl QueryEnergyProducers {
             #[allow(dead_code)]
             pub fn encode_call() -> Vec<u8> {
-                <Red as ActionIo>::encode_call(&())
+                <QueryEnergyProducers as ActionIo>::encode_call(&())
             }
         }
-        impl ActionIo for Red {
+
+        impl ActionIo for QueryEnergyProducers {
             const ROUTE: &'static [u8] = &[
-                48, 84, 114, 97, 102, 102, 105, 99, 76, 105, 103, 104, 116, 12, 82, 101, 100,
+                28, 83, 101, 114, 118, 105, 99, 101, 80, 81, 117, 101, 114, 121, 69, 110, 101, 114,
+                103, 121, 80, 114, 111, 100, 117, 99, 101, 114, 115,
             ];
             type Params = ();
-            type Reply = super::TrafficLightEvent;
+            type Reply = super::IoState;
         }
-        pub struct Yellow(());
-        impl Yellow {
+        pub struct QueryProducerEnergy(());
+
+        impl QueryProducerEnergy {
             #[allow(dead_code)]
-            pub fn encode_call() -> Vec<u8> {
-                <Yellow as ActionIo>::encode_call(&())
+            pub fn encode_call(producer_id: ActorId) -> Vec<u8> {
+                <QueryProducerEnergy as ActionIo>::encode_call(&producer_id)
             }
         }
-        impl ActionIo for Yellow {
+
+        impl ActionIo for QueryProducerEnergy {
             const ROUTE: &'static [u8] = &[
-                48, 84, 114, 97, 102, 102, 105, 99, 76, 105, 103, 104, 116, 24, 89, 101, 108, 108,
-                111, 119,
+                28, 83, 101, 114, 118, 105, 99, 101, 76, 81, 117, 101, 114, 121, 80, 114, 111, 100,
+                117, 99, 101, 114, 69, 110, 101, 114, 103, 121,
             ];
-            type Params = ();
-            type Reply = super::TrafficLightEvent;
-        }
-        pub struct TrafficLight(());
-        impl TrafficLight {
-            #[allow(dead_code)]
-            pub fn encode_call() -> Vec<u8> {
-                <TrafficLight as ActionIo>::encode_call(&())
-            }
-        }
-        impl ActionIo for TrafficLight {
-            const ROUTE: &'static [u8] = &[
-                48, 84, 114, 97, 102, 102, 105, 99, 76, 105, 103, 104, 116, 48, 84, 114, 97, 102,
-                102, 105, 99, 76, 105, 103, 104, 116,
-            ];
-            type Params = ();
-            type Reply = super::IoTrafficLightState;
+            type Params = ActorId;
+            type Reply = Option<u64>;
         }
     }
 }
-#[derive(PartialEq, Debug, Encode, Decode, TypeInfo)]
+#[derive(PartialEq, Clone, Debug, Encode, Decode, TypeInfo)]
 #[codec(crate = sails_rs::scale_codec)]
 #[scale_info(crate = sails_rs::scale_info)]
-pub struct KeyringData {
-    pub address: String,
-    pub encoded: String,
+pub enum Events {
+    ProducerRegistered { id: ActorId },
+    ProducerAlreadyRegistered { id: ActorId },
+    ProducerNotFound { id: ActorId },
+    EnergyUpdated { id: ActorId, energy: u64 },
+    AdminRegistered { id: ActorId },
+    AdminAlreadyRegistered { id: ActorId },
 }
-#[derive(PartialEq, Debug, Encode, Decode, TypeInfo)]
+#[derive(PartialEq, Clone, Debug, Encode, Decode, TypeInfo)]
 #[codec(crate = sails_rs::scale_codec)]
 #[scale_info(crate = sails_rs::scale_info)]
-pub enum KeyringEvent {
-    KeyringAccountSet,
-    Error(KeyringError),
+pub struct IoState {
+    pub admins: Vec<ActorId>,
+    pub energy_producers: Vec<IoEnergyProducer>,
 }
-#[derive(PartialEq, Debug, Encode, Decode, TypeInfo)]
+#[derive(PartialEq, Clone, Debug, Encode, Decode, TypeInfo)]
 #[codec(crate = sails_rs::scale_codec)]
 #[scale_info(crate = sails_rs::scale_info)]
-pub enum KeyringError {
-    KeyringAddressAlreadyEsists,
-    UserAddressAlreadyExists,
-    UserCodedNameAlreadyExists,
-    UserDoesNotHasKeyringAccount,
-    KeyringAccountAlreadyExists,
-    SessionHasInvalidCredentials,
-    UserAndKeyringAddressAreTheSame,
-}
-#[derive(PartialEq, Debug, Encode, Decode, TypeInfo)]
-#[codec(crate = sails_rs::scale_codec)]
-#[scale_info(crate = sails_rs::scale_info)]
-pub enum KeyringQueryEvent {
-    LastWhoCall(ActorId),
-    SignlessAccountAddress(Option<ActorId>),
-    SignlessAccountData(Option<KeyringData>),
-}
-#[derive(PartialEq, Debug, Encode, Decode, TypeInfo)]
-#[codec(crate = sails_rs::scale_codec)]
-#[scale_info(crate = sails_rs::scale_info)]
-pub enum TrafficLightEvent {
-    Green,
-    Yellow,
-    Red,
-}
-#[derive(PartialEq, Debug, Encode, Decode, TypeInfo)]
-#[codec(crate = sails_rs::scale_codec)]
-#[scale_info(crate = sails_rs::scale_info)]
-pub struct IoTrafficLightState {
-    pub current_light: String,
-    pub all_users: Vec<(ActorId, String)>,
+pub struct IoEnergyProducer {
+    pub id: ActorId,
+    pub energy_generated: u64,
 }
 
 pub mod traits {
@@ -350,38 +242,26 @@ pub mod traits {
     }
 
     #[allow(clippy::type_complexity)]
-    pub trait Keyring {
+    pub trait Service {
         type Args;
-        fn bind_keyring_data_to_user_address(
+        fn register_admin(
             &mut self,
-            user_address: ActorId,
-            keyring_data: KeyringData,
-        ) -> impl Call<Output = KeyringEvent, Args = Self::Args>;
-        fn bind_keyring_data_to_user_coded_name(
+            admin_id: ActorId,
+        ) -> impl Call<Output = Events, Args = Self::Args>;
+        fn register_producer(
             &mut self,
-            user_coded_name: String,
-            keyring_data: KeyringData,
-        ) -> impl Call<Output = KeyringEvent, Args = Self::Args>;
-        fn keyring_account_data(
+            producer_id: ActorId,
+        ) -> impl Call<Output = Events, Args = Self::Args>;
+        fn update_producer_energy(
+            &mut self,
+            producer_id: ActorId,
+            energy: u64,
+        ) -> impl Call<Output = Events, Args = Self::Args>;
+        fn query_admins(&self) -> impl Query<Output = IoState, Args = Self::Args>;
+        fn query_energy_producers(&self) -> impl Query<Output = IoState, Args = Self::Args>;
+        fn query_producer_energy(
             &self,
-            keyring_address: ActorId,
-        ) -> impl Query<Output = KeyringQueryEvent, Args = Self::Args>;
-        fn keyring_address_from_user_address(
-            &self,
-            user_address: ActorId,
-        ) -> impl Query<Output = KeyringQueryEvent, Args = Self::Args>;
-        fn keyring_address_from_user_coded_name(
-            &self,
-            user_coded_name: String,
-        ) -> impl Query<Output = KeyringQueryEvent, Args = Self::Args>;
-    }
-
-    #[allow(clippy::type_complexity)]
-    pub trait TrafficLight {
-        type Args;
-        fn green(&mut self) -> impl Call<Output = TrafficLightEvent, Args = Self::Args>;
-        fn red(&mut self) -> impl Call<Output = TrafficLightEvent, Args = Self::Args>;
-        fn yellow(&mut self) -> impl Call<Output = TrafficLightEvent, Args = Self::Args>;
-        fn traffic_light(&self) -> impl Query<Output = IoTrafficLightState, Args = Self::Args>;
+            producer_id: ActorId,
+        ) -> impl Query<Output = Option<u64>, Args = Self::Args>;
     }
 }
